@@ -1,182 +1,142 @@
-// FAQ Accordion
+// ═══════════════════════════════════════════════════
+// FAQ Accordion — with ARIA support
+// ═══════════════════════════════════════════════════
 document.querySelectorAll('.faq-question').forEach(button => {
     button.addEventListener('click', () => {
         const faqItem = button.parentElement;
         const isActive = faqItem.classList.contains('active');
-        
+
         // Close all
         document.querySelectorAll('.faq-item').forEach(item => {
             item.classList.remove('active');
+            const btn = item.querySelector('.faq-question');
+            if (btn) btn.setAttribute('aria-expanded', 'false');
         });
-        
+
         // Toggle current
         if (!isActive) {
             faqItem.classList.add('active');
+            button.setAttribute('aria-expanded', 'true');
         }
     });
 });
 
-// Form Submission Mock
-document.getElementById('leadForm').addEventListener('submit', (e) => {
-    e.preventDefault();
-    const btn = e.target.querySelector('button');
-    btn.innerHTML = 'Processing...';
-    btn.style.opacity = '0.7';
-    
-    // Simulate network request
-    setTimeout(() => {
-        btn.style.display = 'none';
-        document.getElementById('formSuccess').classList.remove('hidden');
-    }, 1000);
-});
+// ═══════════════════════════════════════════════════
+// Form Submission
+// ═══════════════════════════════════════════════════
+const leadForm = document.getElementById('leadForm');
+if (leadForm) {
+    leadForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const btn = e.target.querySelector('button[type="submit"]');
+        const originalContent = btn.innerHTML;
+        btn.innerHTML = 'Sending…';
+        btn.disabled = true;
+        btn.style.opacity = '0.7';
 
+        setTimeout(() => {
+            btn.style.display = 'none';
+            const success = document.getElementById('formSuccess');
+            if (success) success.classList.remove('hidden');
+        }, 1000);
+    });
+}
+
+// ═══════════════════════════════════════════════════
 // Smooth Scroll for anchor links
+// ═══════════════════════════════════════════════════
 document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     anchor.addEventListener('click', function (e) {
         e.preventDefault();
         const targetId = this.getAttribute('href');
         if (targetId === '#') return;
-        
+
+        // Close mobile nav if open
+        closeMobileNav();
+
         const targetElement = document.querySelector(targetId);
         if (targetElement) {
-            targetElement.scrollIntoView({
-                behavior: 'smooth'
-            });
+            const headerHeight = 70;
+            const top = targetElement.getBoundingClientRect().top + window.scrollY - headerHeight;
+            window.scrollTo({ top, behavior: 'smooth' });
         }
     });
 });
 
-// --- React Bits Visual Animations ---
+// ═══════════════════════════════════════════════════
+// Mobile Navigation
+// ═══════════════════════════════════════════════════
+const hamburger = document.getElementById('hamburger-btn');
+const mobileNav = document.getElementById('mobile-nav-overlay');
+const mobileClose = document.getElementById('mobile-nav-close');
 
-// 1. Squares Grid Canvas Animation
-(() => {
-    const canvas = document.getElementById('squares-bg');
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
+function openMobileNav() {
+    if (!hamburger || !mobileNav) return;
+    hamburger.classList.add('active');
+    hamburger.setAttribute('aria-expanded', 'true');
+    mobileNav.classList.add('active');
+    mobileNav.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+}
 
-    let width = canvas.width = window.innerWidth;
-    let height = canvas.height = window.innerHeight;
+function closeMobileNav() {
+    if (!hamburger || !mobileNav) return;
+    hamburger.classList.remove('active');
+    hamburger.setAttribute('aria-expanded', 'false');
+    mobileNav.classList.remove('active');
+    mobileNav.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+}
 
-    const squareSize = 48; // size of each grid square in pixels
-    const gridColor = 'rgba(39, 39, 42, 0.15)'; // Zinc 800 with very low opacity
-    const activeColor = 'rgba(255, 255, 255, 0.05)';
+if (hamburger) hamburger.addEventListener('click', openMobileNav);
+if (mobileClose) mobileClose.addEventListener('click', closeMobileNav);
 
-    let cols = Math.ceil(width / squareSize);
-    let rows = Math.ceil(height / squareSize);
+// Close on Escape key
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeMobileNav();
+});
 
-    const activeSquares = new Map(); // key: "col,row", value: { opacity, target, speed, state }
+// ═══════════════════════════════════════════════════
+// IntersectionObserver — Reveal Animations
+// ═══════════════════════════════════════════════════
+const revealObserver = new IntersectionObserver((entries) => {
+    entries.forEach((entry, i) => {
+        if (entry.isIntersecting) {
+            // Stagger siblings in the same grid
+            const siblings = entry.target.parentElement
+                ? Array.from(entry.target.parentElement.querySelectorAll('.reveal:not(.visible)'))
+                : [];
+            const delay = siblings.indexOf(entry.target) * 60;
 
-    window.addEventListener('resize', () => {
-        width = canvas.width = window.innerWidth;
-        height = canvas.height = window.innerHeight;
-        cols = Math.ceil(width / squareSize);
-        rows = Math.ceil(height / squareSize);
+            setTimeout(() => {
+                entry.target.classList.add('visible');
+            }, Math.min(delay, 300));
+
+            revealObserver.unobserve(entry.target);
+        }
     });
+}, {
+    threshold: 0.1,
+    rootMargin: '0px 0px -40px 0px'
+});
 
-    let mouseX = -9999;
-    let mouseY = -9999;
+document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el));
 
-    window.addEventListener('mousemove', (e) => {
-        mouseX = e.clientX;
-        mouseY = e.clientY;
-    });
 
-    window.addEventListener('mouseleave', () => {
-        mouseX = -9999;
-        mouseY = -9999;
-    });
-
-    function animate() {
-        ctx.clearRect(0, 0, width, height);
-
-        // Grid background fill
-        ctx.fillStyle = '#000000';
-        ctx.fillRect(0, 0, width, height);
-
-        // Periodically select a random square to trigger a glowing flash animation
-        if (Math.random() < 0.12) {
-            const c = Math.floor(Math.random() * cols);
-            const r = Math.floor(Math.random() * rows);
-            const key = `${c},${r}`;
-            if (!activeSquares.has(key)) {
-                activeSquares.set(key, {
-                    opacity: 0,
-                    target: 0.08 + Math.random() * 0.06, // max opacity
-                    speed: 0.0015 + Math.random() * 0.0025,
-                    state: 'in' // 'in' or 'out'
-                });
-            }
-        }
-
-        // Render animated squares
-        for (const [key, sq] of activeSquares.entries()) {
-            const [c, r] = key.split(',').map(Number);
-
-            if (sq.state === 'in') {
-                sq.opacity += sq.speed;
-                if (sq.opacity >= sq.target) {
-                    sq.opacity = sq.target;
-                    sq.state = 'out';
-                }
-            } else {
-                sq.opacity -= sq.speed;
-                if (sq.opacity <= 0) {
-                    activeSquares.delete(key);
-                    continue;
-                }
-            }
-
-            ctx.fillStyle = `rgba(255, 255, 255, ${sq.opacity})`;
-            ctx.fillRect(c * squareSize, r * squareSize, squareSize, squareSize);
-        }
-
-        // Highlight square under mouse & neighbors
-        if (mouseX !== -9999 && mouseY !== -9999) {
-            const mCol = Math.floor(mouseX / squareSize);
-            const mRow = Math.floor(mouseY / squareSize);
-
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
-            ctx.fillRect(mCol * squareSize, mRow * squareSize, squareSize, squareSize);
-
-            // Subtle border outline of neighboring squares
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
-            ctx.lineWidth = 1;
-            ctx.strokeRect((mCol - 1) * squareSize, (mRow - 1) * squareSize, squareSize * 3, squareSize * 3);
-        }
-
-        // Draw grid lines
-        ctx.strokeStyle = gridColor;
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-
-        for (let c = 0; c <= cols; c++) {
-            ctx.moveTo(c * squareSize, 0);
-            ctx.lineTo(c * squareSize, height);
-        }
-        for (let r = 0; r <= rows; r++) {
-            ctx.moveTo(0, r * squareSize);
-            ctx.lineTo(width, r * squareSize);
-        }
-        ctx.stroke();
-
-        requestAnimationFrame(animate);
-    }
-
-    animate();
-})();
-
-// 2. Spotlight Card Mouse Coordinates Tracking
-document.querySelectorAll('.card, .pricing-card, .process-step, .faq-item').forEach(card => {
+// ═══════════════════════════════════════════════════
+// Spotlight Card Mouse Tracking
+// ═══════════════════════════════════════════════════
+document.querySelectorAll('.card, .pricing-card, .process-step, .faq-item, .testimonial-card').forEach(card => {
     card.addEventListener('mousemove', e => {
         const rect = card.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-        card.style.setProperty('--mouse-x', `${x}px`);
-        card.style.setProperty('--mouse-y', `${y}px`);
+        card.style.setProperty('--mouse-x', `${e.clientX - rect.left}px`);
+        card.style.setProperty('--mouse-y', `${e.clientY - rect.top}px`);
     });
 });
 
-// 3. Decrypted / Scrambled Text Effect
+// ═══════════════════════════════════════════════════
+// Text Scramble Effect
+// ═══════════════════════════════════════════════════
 class TextScramble {
     constructor(el) {
         this.el = el;
@@ -231,28 +191,51 @@ class TextScramble {
     }
 }
 
-// Scramble the logo text and hero title
 const logo = document.querySelector('.logo');
 if (logo) {
     const scrambleLogo = new TextScramble(logo);
-    scrambleLogo.setText("Abdel // AI Web Systems");
+    scrambleLogo.setText('Abdelilah // AI Web Systems');
     logo.addEventListener('mouseenter', () => {
-        scrambleLogo.setText("Abdel // AI Web Systems");
+        scrambleLogo.setText('Abdelilah // AI Web Systems');
     });
 }
 
-// 4. Magnetic Buttons / Elements
+// ═══════════════════════════════════════════════════
+// Magnetic Buttons
+// ═══════════════════════════════════════════════════
 document.querySelectorAll('.btn-primary, .btn-secondary, .btn-glass, .badge').forEach(btn => {
     btn.addEventListener('mousemove', e => {
         const rect = btn.getBoundingClientRect();
         const x = e.clientX - rect.left - rect.width / 2;
         const y = e.clientY - rect.top - rect.height / 2;
-        
-        // Pull towards cursor (12% intensity)
         btn.style.transform = `translate(${x * 0.12}px, ${y * 0.12}px)`;
     });
-    
     btn.addEventListener('mouseleave', () => {
         btn.style.transform = 'translate(0px, 0px)';
     });
 });
+
+// ═══════════════════════════════════════════════════
+// Sticky CTA on Scroll
+// ═══════════════════════════════════════════════════
+const stickyCta = document.getElementById('sticky-cta');
+if (stickyCta) {
+    let ticking = false;
+    window.addEventListener('scroll', () => {
+        if (!ticking) {
+            requestAnimationFrame(() => {
+                if (window.scrollY > 600) {
+                    stickyCta.classList.remove('hidden');
+                    stickyCta.classList.add('visible');
+                } else {
+                    stickyCta.classList.remove('visible');
+                    if (window.scrollY < 100) {
+                        stickyCta.classList.add('hidden');
+                    }
+                }
+                ticking = false;
+            });
+            ticking = true;
+        }
+    });
+}
